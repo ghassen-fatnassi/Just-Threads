@@ -1,4 +1,4 @@
-# Just-Threads:Learning Parallel COmputing 🚀  
+# Just-Threads:Learning Parallel Computing 🚀  
 
 ## 📋 Intro 
 
