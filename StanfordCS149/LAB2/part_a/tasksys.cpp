@@ -68,7 +68,10 @@ TaskSystemParallelSpawn::TaskSystemParallelSpawn(int num_threads): ITaskSystem(n
 TaskSystemParallelSpawn::~TaskSystemParallelSpawn() 
 {
 }
-
+// this function spawns already defined number of threads when it gets a runnable , 
+// but has 2 ways of assigning work to threads :
+// static <= (if dynamic will incurr a lots of scheduling overhead)
+// dynamic <= (when)
 void TaskSystemParallelSpawn::run(IRunnable* runnable, int num_total_tasks) {
 
     constexpr int RATIO_THRESHOLD = 2;
