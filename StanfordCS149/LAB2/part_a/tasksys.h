@@ -31,7 +31,7 @@ class TaskSystemParallelSpawn: public ITaskSystem {
         const char* name();
 
         std::atomic<int> pool_count;
-        std::vector<std::thread> threads;
+        std::vector<std::thread> threads; //threads are declared but not defined => don't qualify as thread pool
         const int RATIO_THRESHOLD = 10;  
         /* if (tasks_in_bulk/num_threads >= ratio) 
         => static execution (heuristic approach , but it works)
@@ -53,13 +53,17 @@ class TaskSystemParallelThreadPoolSpinning : public ITaskSystem {
         TaskSystemParallelThreadPoolSpinning(int num_threads);
         ~TaskSystemParallelThreadPoolSpinning();
         const char* name();    
+
+
         void run(IRunnable* runnable, int num_total_tasks);
         TaskID runAsyncWithDeps(IRunnable* runnable, int num_total_tasks,
                                 const std::vector<TaskID>& deps);
         void sync();
+    private:
+        std::vector<std::thread> pool;
+        //define here the rest of mutex/futures/atomic vars
 };
-    
-    
+
 
 
 

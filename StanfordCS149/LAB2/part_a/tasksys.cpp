@@ -71,7 +71,7 @@ TaskSystemParallelSpawn::~TaskSystemParallelSpawn()
 // this function spawns already defined number of threads when it gets a runnable , 
 // but has 2 ways of assigning work to threads :
 // static <= (if dynamic will incurr a lots of scheduling overhead)
-// dynamic <= (when)
+// dynamic <= (when there is a risk of load imbalance, which is not the case here but i'll implement it anyway )
 void TaskSystemParallelSpawn::run(IRunnable* runnable, int num_total_tasks) {
 
     constexpr int RATIO_THRESHOLD = 2;
@@ -114,23 +114,25 @@ void TaskSystemParallelSpawn::sync() {
     return;
 }
 
+
+
+
+
+
+
 /*
  * ================================================================
  * Parallel Thread Pool Spinning Task System Implementation
  * ================================================================
  */
 
- const char* TaskSystemParallelThreadPoolSpinning::name() {
-    return "Parallel + Thread Pool + Spin";
-}
 
-// Worker thread loop
-void threadLoop(std::queue<std::pair<IRunnable*, std::pair<int, int>>>* task_q,
-                std::mutex* mtx,
-                std::atomic<bool>* done,
-                std::atomic<int>* tasks_remaining)
-{
-    //while()
+
+
+
+
+const char* TaskSystemParallelThreadPoolSpinning::name() {
+    return "Parallel + Thread Pool + Spin";
 }
 
 // Constructor
