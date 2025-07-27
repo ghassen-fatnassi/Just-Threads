@@ -6,17 +6,14 @@ else
     CXX = g++ -m64
 endif
 
-# Add Thread Sanitizer flags here
-TSAN_FLAGS = -fsanitize=thread -fno-omit-frame-pointer
+CXXFLAGS=-I. -I../common -I../tests -Iobjs/ -O3 -std=c++11 -Wall 
 
-CXXFLAGS = -I. -I../common -I../tests -Iobjs/ -std=c++11 -Wall $(TSAN_FLAGS)
+APP_NAME=runtasks
+OBJDIR=objs
+COMMONDIR=../common
 
-APP_NAME = runtasks
-OBJDIR = objs
-COMMONDIR = ../common
-
-PPM_CXX = $(COMMONDIR)/ppm.cpp
-PPM_OBJ = $(addprefix $(OBJDIR)/, $(subst $(COMMONDIR)/,, $(PPM_CXX:.cpp=.o)))
+PPM_CXX=$(COMMONDIR)/ppm.cpp
+PPM_OBJ=$(addprefix $(OBJDIR)/, $(subst $(COMMONDIR)/,, $(PPM_CXX:.cpp=.o)))
 
 default: $(APP_NAME)
 
@@ -28,10 +25,10 @@ dirs:
 clean:
 	/bin/rm -rf $(OBJDIR) *.ppm *~ $(APP_NAME)
 
-OBJS = $(PPM_OBJ) $(OBJDIR)/tasksys.o
+OBJS=$(PPM_OBJ) $(OBJDIR)/tasksys.o
 
 $(APP_NAME): clean dirs $(OBJS)
-	$(CXX) ../tests/main.cpp $(CXXFLAGS) -o $@ $(OBJDIR)/tasksys.o -lm -lpthread $(TSAN_FLAGS)
+	$(CXX) ../tests/main.cpp $(CXXFLAGS) -o $@ $(OBJDIR)/tasksys.o -lm -lpthread
 
 $(OBJDIR)/%.o: $(COMMONDIR)/%.cpp
 	$(CXX) $< $(CXXFLAGS) -c -o $@

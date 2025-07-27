@@ -1,5 +1,7 @@
 #include "tasksys.h"
 #include "../common/CycleTimer.h"
+#include <cassert>
+
 #include <iostream>
 IRunnable::~IRunnable() {}  
 ITaskSystem::ITaskSystem(int num_threads) {}
@@ -127,101 +129,66 @@ void TaskSystemParallelSpawn::sync() {
  */
 
 
-void TaskSystemParallelThreadPoolSpinning::spin()
-{
-    while (true) {
-        IRunnable* task;
-        int i, num_tasks;
-
-        lock.lock();
-        if (task_queue.empty()) {
-            // ✅ If done is true AND queue is empty, it's time to exit
-            if (done) {
-                lock.unlock();
-                break;
-            }
-            lock.unlock();
-            //std::cout<<"queue empty , discovered by thread  "<<std::this_thread::get_id()<<"\n";
-            //yield
-            std::this_thread::yield(); // Yield to allow other threads to run
-            continue; // Check the queue again
-        } else {
-            auto pair = task_queue.front();
-            task_queue.pop();
-            lock.unlock();
-            task = pair.first;
-            auto x = pair.second;
-            i = x.first;
-            num_tasks = x.second;
-
-            // if(i%32==0) 
-            // {
-            //     std::cout<<"Thread "<<std::this_thread::get_id()<<" running task "<<i<<" of "<<num_tasks<<"\n";
-            // }
-
-            task->runTask(i, num_tasks);
-            tasks_done++;
-        }
-    }
-}
-
 const char* TaskSystemParallelThreadPoolSpinning::name() {
     return "Parallel + Thread Pool + Spin";
 }
 
-// Constructor
-TaskSystemParallelThreadPoolSpinning::TaskSystemParallelThreadPoolSpinning(int num_threads): ITaskSystem(num_threads)
-{
-    TaskSystemParallelThreadPoolSpinning::threads.reserve(num_threads);
-    done = false;
-    tasks_done = 0;
-    for(int i = 0; i < num_threads; i++) 
-    {
-        threads.push_back(std::thread(&TaskSystemParallelThreadPoolSpinning::spin, this));
+TaskSystemParallelThreadPoolSpinning::TaskSystemParallelThreadPoolSpinning(int num_threads): ITaskSystem(num_threads),
+    runnable_(nullptr), stop_(false), task_done_(0) {
+
+    threads_.reserve(num_threads);
+    for (int i = 0; i < num_threads; ++i) {
+       threads_.emplace_back([&]() {
+           while (!stop_) {
+            int task_index = -1;
+            {
+                std::lock_guard<std::mutex> lk(lk_);
+                if (!task_index_.empty()) {
+                    task_index = task_index_.front();
+                    task_index_.pop();
+                }
+            }
+            if (task_index != -1) {
+                runnable_->runTask(task_index, num_total_tasks_);
+                ++task_done_;
+            }
+       }});
     }
 }
 
-TaskSystemParallelThreadPoolSpinning::~TaskSystemParallelThreadPoolSpinning() 
-{
-    // Wait for all threads to finish
-    done = true; // Signal threads to exit
-    for (auto& t : threads) {
-        if (t.joinable()) {
-            t.join();
+TaskSystemParallelThreadPoolSpinning::~TaskSystemParallelThreadPoolSpinning() {
+    stop_ = true;
+    for (auto& thread : threads_) {
+        thread.join();
+    }
+    threads_.clear();
+}
+
+void TaskSystemParallelThreadPoolSpinning::run(IRunnable* runnable, int num_total_tasks) {
+
+    num_total_tasks_ = num_total_tasks;
+    runnable_ = runnable;
+    task_done_ = 0;
+    std::cout << "Running " << num_total_tasks << " tasks with " << threads_.size() << " threads." << std::endl;
+    {
+        std::lock_guard<std::mutex> lk(lk_);//this makes sure the whole scope is thread-safe
+        assert(task_index_.empty());
+        for (int i = 0; i < num_total_tasks; ++i) {
+            task_index_.push(i);
         }
     }
-    threads.clear();
+    while (task_done_ != num_total_tasks);
+    //we keep this here to make sure this scope ends if and only if all instances of the task are done
+    // so we avoid calling the destructor while worker threads are still doing work 
+    // forgetting to write the line will result in correction test failing 
 }
 
-// Run a task with specified number of total tasks
-void TaskSystemParallelThreadPoolSpinning::run(IRunnable* runnable, int num_total_tasks) 
-{
-    //we will lock the whole scope
-    lock.lock();
-    tasks_done = 0; // Reset tasks_done
-    done = false; // Reset done flag
-    for(int i = 0; i < num_total_tasks; ++i)
-    {
-        task_queue.push(std::make_pair(runnable, std::make_pair(i, num_total_tasks)));
-    }
-    lock.unlock();
-    //the joining of the threads is done in the destructor
-    while (tasks_done.load(std::memory_order_relaxed) < num_total_tasks)
-    {
-        std::this_thread::yield(); // so the main thread doesn’t hog CPU
-    }
-    done = true; // ✅ Tell threads to exit cleanly
-}
-
-
-// Asynchronous task submission (not used in this version)
 TaskID TaskSystemParallelThreadPoolSpinning::runAsyncWithDeps(IRunnable* runnable, int num_total_tasks,
                                                               const std::vector<TaskID>& deps) {
-    return 0; // Not implemented
+    return 0;
 }
 
 void TaskSystemParallelThreadPoolSpinning::sync() {
-    // You do not need to implement this method.
     return;
 }
 

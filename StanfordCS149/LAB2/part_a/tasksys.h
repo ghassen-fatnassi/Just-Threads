@@ -48,31 +48,23 @@ class TaskSystemParallelSpawn: public ITaskSystem {
  * thread pool. See definition of ITaskSystem in itasksys.h for
  * documentation of the ITaskSystem interface.
  */
-class TaskSystemParallelThreadPoolSpinning : public ITaskSystem {
+class TaskSystemParallelThreadPoolSpinning: public ITaskSystem {
     public:
         TaskSystemParallelThreadPoolSpinning(int num_threads);
         ~TaskSystemParallelThreadPoolSpinning();
-        const char* name();    
-
-        std::queue<std::pair<IRunnable*,std::pair<int,int>>> task_queue;
-        std::vector<std::thread> threads;
-        std::mutex lock;//used to make sure operations on the task_queu are htread safe
-        std::atomic<bool> done;//used to signal for all threads to exit 0 meaning not done
-        std::atomic<int> tasks_done;
-
-
+        const char* name();
         void run(IRunnable* runnable, int num_total_tasks);
-
-        //defined this function here to avoid defininf it inline
-        //+ 
-        //to avoid passing atomic variables by reference since it caused me a lot of error !!
-        void spin();
-
-
-
         TaskID runAsyncWithDeps(IRunnable* runnable, int num_total_tasks,
                                 const std::vector<TaskID>& deps);
         void sync();
+private:
+    std::vector<std::thread> threads_;
+    int num_total_tasks_;
+    IRunnable *runnable_;
+    std::queue<int> task_index_;
+    std::mutex lk_;
+    bool stop_;
+    std::atomic<int> task_done_;
 };
 
 
