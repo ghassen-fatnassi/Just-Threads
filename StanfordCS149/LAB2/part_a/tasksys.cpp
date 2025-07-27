@@ -1,7 +1,7 @@
 #include "tasksys.h"
 #include "../common/CycleTimer.h"
-
-IRunnable::~IRunnable() {}
+#include <iostream>
+IRunnable::~IRunnable() {}  
 ITaskSystem::ITaskSystem(int num_threads) {}
 ITaskSystem::~ITaskSystem() {}
 /*
@@ -127,9 +127,43 @@ void TaskSystemParallelSpawn::sync() {
  */
 
 
+void TaskSystemParallelThreadPoolSpinning::spin()
+{
+    while (true) {
+        IRunnable* task;
+        int i, num_tasks;
 
+        lock.lock();
+        if (task_queue.empty()) {
+            // ✅ If done is true AND queue is empty, it's time to exit
+            if (done) {
+                lock.unlock();
+                break;
+            }
+            lock.unlock();
+            //std::cout<<"queue empty , discovered by thread  "<<std::this_thread::get_id()<<"\n";
+            //yield
+            std::this_thread::yield(); // Yield to allow other threads to run
+            continue; // Check the queue again
+        } else {
+            auto pair = task_queue.front();
+            task_queue.pop();
+            lock.unlock();
+            task = pair.first;
+            auto x = pair.second;
+            i = x.first;
+            num_tasks = x.second;
 
+            // if(i%32==0) 
+            // {
+            //     std::cout<<"Thread "<<std::this_thread::get_id()<<" running task "<<i<<" of "<<num_tasks<<"\n";
+            // }
 
+            task->runTask(i, num_tasks);
+            tasks_done++;
+        }
+    }
+}
 
 const char* TaskSystemParallelThreadPoolSpinning::name() {
     return "Parallel + Thread Pool + Spin";
@@ -138,20 +172,45 @@ const char* TaskSystemParallelThreadPoolSpinning::name() {
 // Constructor
 TaskSystemParallelThreadPoolSpinning::TaskSystemParallelThreadPoolSpinning(int num_threads): ITaskSystem(num_threads)
 {
-
+    TaskSystemParallelThreadPoolSpinning::threads.reserve(num_threads);
+    done = false;
+    tasks_done = 0;
+    for(int i = 0; i < num_threads; i++) 
+    {
+        threads.push_back(std::thread(&TaskSystemParallelThreadPoolSpinning::spin, this));
+    }
 }
 
 TaskSystemParallelThreadPoolSpinning::~TaskSystemParallelThreadPoolSpinning() 
 {
-
+    // Wait for all threads to finish
+    done = true; // Signal threads to exit
+    for (auto& t : threads) {
+        if (t.joinable()) {
+            t.join();
+        }
+    }
+    threads.clear();
 }
 
 // Run a task with specified number of total tasks
 void TaskSystemParallelThreadPoolSpinning::run(IRunnable* runnable, int num_total_tasks) 
 {
-    for (int i = 0; i < num_total_tasks; i++) {
-        runnable->runTask(i, num_total_tasks);
+    //we will lock the whole scope
+    lock.lock();
+    tasks_done = 0; // Reset tasks_done
+    done = false; // Reset done flag
+    for(int i = 0; i < num_total_tasks; ++i)
+    {
+        task_queue.push(std::make_pair(runnable, std::make_pair(i, num_total_tasks)));
     }
+    lock.unlock();
+    //the joining of the threads is done in the destructor
+    while (tasks_done.load(std::memory_order_relaxed) < num_total_tasks)
+    {
+        std::this_thread::yield(); // so the main thread doesn’t hog CPU
+    }
+    done = true; // ✅ Tell threads to exit cleanly
 }
 
 
