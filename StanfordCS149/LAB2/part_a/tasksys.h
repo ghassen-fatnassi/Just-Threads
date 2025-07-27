@@ -61,7 +61,8 @@ private:
     std::vector<std::thread> threads_;
     int num_total_tasks_;
     IRunnable *runnable_;
-    std::queue<int> task_index_;
+    std::queue<int> task_queue_;
+    int bulk_size; 
     std::mutex lk_;
     bool stop_;
     std::atomic<int> task_done_;

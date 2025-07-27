@@ -135,7 +135,12 @@ const char* TaskSystemParallelThreadPoolSpinning::name() {
 
 TaskSystemParallelThreadPoolSpinning::TaskSystemParallelThreadPoolSpinning(int num_threads): ITaskSystem(num_threads),
     runnable_(nullptr), stop_(false), task_done_(0) {
-
+    //
+    // TODO: CS149 student implementations may decide to perform setup
+    // operations (such as thread pool construction) here.
+    // Implementations are free to add new class member variables
+    // (requiring changes to tasksys.h).
+    //
     threads_.reserve(num_threads);
     for (int i = 0; i < num_threads; ++i) {
        threads_.emplace_back([&]() {
@@ -143,9 +148,9 @@ TaskSystemParallelThreadPoolSpinning::TaskSystemParallelThreadPoolSpinning(int n
             int task_index = -1;
             {
                 std::lock_guard<std::mutex> lk(lk_);
-                if (!task_index_.empty()) {
-                    task_index = task_index_.front();
-                    task_index_.pop();
+                if (!task_queue_.empty()) {
+                    task_index = task_queue_.front();
+                    task_queue_.pop();
                 }
             }
             if (task_index != -1) {
@@ -161,26 +166,30 @@ TaskSystemParallelThreadPoolSpinning::~TaskSystemParallelThreadPoolSpinning() {
     for (auto& thread : threads_) {
         thread.join();
     }
-    threads_.clear();
 }
 
 void TaskSystemParallelThreadPoolSpinning::run(IRunnable* runnable, int num_total_tasks) {
-
+    
+    //
+    // TODO: CS149 students will modify the implementation of this
+    // method in Part A.  The implementation provided below runs all
+    // tasks sequentially on the calling thread.
+    //
     num_total_tasks_ = num_total_tasks;
     runnable_ = runnable;
     task_done_ = 0;
-    std::cout << "Running " << num_total_tasks << " tasks with " << threads_.size() << " threads." << std::endl;
     {
-        std::lock_guard<std::mutex> lk(lk_);//this makes sure the whole scope is thread-safe
-        assert(task_index_.empty());
+        std::lock_guard<std::mutex> lk(lk_);
+        assert(task_queue_.empty());
         for (int i = 0; i < num_total_tasks; ++i) {
-            task_index_.push(i);
+            task_queue_.push(i);
         }
     }
     while (task_done_ != num_total_tasks);
-    //we keep this here to make sure this scope ends if and only if all instances of the task are done
-    // so we avoid calling the destructor while worker threads are still doing work 
-    // forgetting to write the line will result in correction test failing 
+    //why do we need this while loop? 
+    // once this goes out of scope
+    // the destructor will be called
+    
 }
 
 TaskID TaskSystemParallelThreadPoolSpinning::runAsyncWithDeps(IRunnable* runnable, int num_total_tasks,
