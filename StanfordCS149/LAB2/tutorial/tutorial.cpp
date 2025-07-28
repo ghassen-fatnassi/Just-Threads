@@ -1,7 +1,7 @@
 #include <condition_variable>
 #include <mutex>
 #include <thread>
-
+#include <iostream>
 #include <stdio.h>
 
 /*
@@ -85,9 +85,11 @@ void signal_fn(ThreadState* thread_state) {
     // consistent state.
     thread_state->mutex_->lock();
     while (thread_state->counter_ < thread_state->num_waiting_threads_) {
+        std::cout<<"before unlock"<<std::endl;
         thread_state->mutex_->unlock();
         // Release the mutex before calling `notify_all()` to make sure
         // waiting threads have a chance to make progress.
+        std::cout<<"before notify all"<<std::endl;
         thread_state->condition_variable_->notify_all();
         // Re-acquire the mutex to read the shared counter again.
         thread_state->mutex_->lock();
@@ -101,11 +103,17 @@ void wait_fn(ThreadState* thread_state) {
     // when `wait()` is called. The lock is atomically re-acquired when
     // the thread is woken up using `notify_all()`.
     std::unique_lock<std::mutex> lk(*thread_state->mutex_);
+    // at this line exactly , this scope will take the state of the
+    // thread_state->mutex_
+    // if it's locked it'll be blocked at that instruction
+    // if it's not locked it'll lock it and continue through the scope and uunlock it only when it goes out of scope
     thread_state->condition_variable_->wait(lk);
     // Increment the shared counter with the lock re-acquired to inform the
     // signaling thread that this waiting thread has successfully been
     // woken up.
     thread_state->counter_++;
+    std::cout << "Thread " << " incremented counter to " 
+              << thread_state->counter_ << std::endl;
     printf("Lock re-acquired after wait()...\n");
     lk.unlock();
 }
@@ -136,6 +144,5 @@ void condition_variable_example() {
 
 
 int main(int argc, char** argv) {
-   mutex_example();
    condition_variable_example();
 }
