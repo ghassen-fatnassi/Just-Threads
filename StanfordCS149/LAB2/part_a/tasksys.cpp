@@ -189,7 +189,9 @@ void TaskSystemParallelThreadPoolSpinning::run(IRunnable* runnable, int num_tota
     //why do we need this while loop? 
     // once this goes out of scope
     // the destructor will be called
-    
+    // and done will become true
+    // and the threads will be joined while there is still some work to do
+    // which means the solution won't pass correctness check
 }
 
 TaskID TaskSystemParallelThreadPoolSpinning::runAsyncWithDeps(IRunnable* runnable, int num_total_tasks,
@@ -207,8 +209,47 @@ void TaskSystemParallelThreadPoolSpinning::sync() {
  * ================================================================
  */
 
+// the implementation i decided on is: 
+// to use the condition variable on checking the emptiness of the queue, 
+// once it's not empty it'll notify all threads and the worker threads will be notified 
+// and will lock pop then unlock and start processing which means no concurrency problems 
+// since we are giving up the first queue element to the firs thread that wakes up 
+
 const char* TaskSystemParallelThreadPoolSleeping::name() {
     return "Parallel + Thread Pool + Sleep";
+}
+
+
+void TaskSystemParallelThreadPoolSleeping::signal_fn() 
+{
+    thread_state_->mutex_->lock();
+    while(!stop_) 
+    {
+        if(!task_queue_.empty()) {
+            thread_state_->mutex_->unlock();
+            thread_state_->condition_variable_->notify_all();
+            thread_state_->mutex_->lock();
+        }
+    }
+    thread_state_->mutex_->unlock();
+}
+
+void TaskSystemParallelThreadPoolSleeping::wait_fn()
+{
+    while(!stop_)
+    {
+        std::unique_lock<std::mutex> lk(*thread_state_->mutex_);
+        thread_state_->condition_variable_->wait(lk);
+        auto task_index = task_queue_.front();
+        task_queue_.pop();
+        lk.unlock();
+        //runtask here
+        runnable_->runTask(task_index, num_total_tasks_);
+        std::cout << "Thread " << std::this_thread::get_id() 
+                  << " completed task " << task_index << std::endl;
+        ++task_done_;
+    }
+    
 }
 
 TaskSystemParallelThreadPoolSleeping::TaskSystemParallelThreadPoolSleeping(int num_threads): ITaskSystem(num_threads) {
@@ -218,6 +259,14 @@ TaskSystemParallelThreadPoolSleeping::TaskSystemParallelThreadPoolSleeping(int n
     // Implementations are free to add new class member variables
     // (requiring changes to tasksys.h).
     //
+    thread_state_ = new ThreadState(num_threads - 1);
+    threads_.reserve(num_threads);
+
+    threads_[0]=std::thread(&TaskSystemParallelThreadPoolSleeping::signal_fn,this);
+
+    for (int i = 1; i < num_threads; ++i) {
+        threads_.emplace_back(std::thread(&TaskSystemParallelThreadPoolSleeping::wait_fn,this));
+    }
 }
 
 TaskSystemParallelThreadPoolSleeping::~TaskSystemParallelThreadPoolSleeping() {
@@ -227,6 +276,12 @@ TaskSystemParallelThreadPoolSleeping::~TaskSystemParallelThreadPoolSleeping() {
     // Implementations are free to add new class member variables
     // (requiring changes to tasksys.h).
     //
+    stop_ = true;
+    for (auto& thread : threads_) {
+        thread.join();
+    }
+    threads_.clear();
+    delete thread_state_;
 }
 
 void TaskSystemParallelThreadPoolSleeping::run(IRunnable* runnable, int num_total_tasks) {
@@ -238,9 +293,17 @@ void TaskSystemParallelThreadPoolSleeping::run(IRunnable* runnable, int num_tota
     // tasks sequentially on the calling thread.
     //
 
-    for (int i = 0; i < num_total_tasks; i++) {
-        runnable->runTask(i, num_total_tasks);
+    num_total_tasks_ = num_total_tasks;
+    runnable_ = runnable;
+    task_done_ = 0;
+    {
+        std::lock_guard<std::mutex> lk(lk_);
+        assert(task_queue_.empty());
+        for (int i = 0; i < num_total_tasks; ++i) {
+            task_queue_.push(i);
+        }
     }
+    while (task_done_ != num_total_tasks);
 }
 
 TaskID TaskSystemParallelThreadPoolSleeping::runAsyncWithDeps(IRunnable* runnable, int num_total_tasks,

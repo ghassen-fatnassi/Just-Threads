@@ -48,6 +48,7 @@ class TaskSystemParallelSpawn: public ITaskSystem {
  * thread pool. See definition of ITaskSystem in itasksys.h for
  * documentation of the ITaskSystem interface.
  */
+
 class TaskSystemParallelThreadPoolSpinning: public ITaskSystem {
     public:
         TaskSystemParallelThreadPoolSpinning(int num_threads);
@@ -62,7 +63,6 @@ private:
     int num_total_tasks_;
     IRunnable *runnable_;
     std::queue<int> task_queue_;
-    int bulk_size; 
     std::mutex lk_;
     bool stop_;
     std::atomic<int> task_done_;
@@ -77,6 +77,26 @@ private:
  * a thread pool. See definition of ITaskSystem in
  * itasksys.h for documentation of the ITaskSystem interface.
  */
+
+//this class is from tutorial.cpp , imma use it here for making sleeping threads
+class ThreadState {
+    public:
+        std::condition_variable* condition_variable_;
+        std::mutex* mutex_;
+        int counter_;
+        int num_waiting_threads_;
+        ThreadState(int num_waiting_threads) {
+            condition_variable_ = new std::condition_variable();
+            mutex_ = new std::mutex();
+            counter_ = 0;
+            num_waiting_threads_ = num_waiting_threads;
+        }
+        ~ThreadState() {
+            delete condition_variable_;
+            delete mutex_;
+        }
+};
+
 class TaskSystemParallelThreadPoolSleeping: public ITaskSystem {
     public:
         TaskSystemParallelThreadPoolSleeping(int num_threads);
@@ -86,6 +106,18 @@ class TaskSystemParallelThreadPoolSleeping: public ITaskSystem {
         TaskID runAsyncWithDeps(IRunnable* runnable, int num_total_tasks,
                                 const std::vector<TaskID>& deps);
         void sync();
+        void signal_fn() ;
+        void wait_fn() ;
+
+    
+        std::vector<std::thread> threads_;
+        int num_total_tasks_;
+        IRunnable *runnable_;
+        std::queue<int> task_queue_;
+        std::mutex lk_;
+        bool stop_;
+        std::atomic<int> task_done_;
+        ThreadState* thread_state_; // for sleeping threads
 };
 
 #endif
