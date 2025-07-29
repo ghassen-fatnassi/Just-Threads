@@ -220,36 +220,41 @@ const char* TaskSystemParallelThreadPoolSleeping::name() {
 }
 
 
-void TaskSystemParallelThreadPoolSleeping::signal_fn() 
-{
-    thread_state_->mutex_->lock();
-    while(!stop_) 
-    {
-        if(!task_queue_.empty()) {
-            thread_state_->mutex_->unlock();
+void TaskSystemParallelThreadPoolSleeping::signal_fn() {
+    std::unique_lock<std::mutex> lk(*thread_state_->mutex_);
+    while(!stop_) {
+        // WAIT INSTEAD OF BUSY-WAIT:
+        thread_state_->condition_variable_->wait(lk, [this] {
+            return !task_queue_.empty() || stop_;
+        });
+        
+        if (stop_) break;
+        if (!task_queue_.empty()) {
+            lk.unlock();
             thread_state_->condition_variable_->notify_all();
-            thread_state_->mutex_->lock();
+            lk.lock();
         }
     }
-    thread_state_->mutex_->unlock();
 }
 
-void TaskSystemParallelThreadPoolSleeping::wait_fn()
-{
-    while(!stop_)
-    {
+void TaskSystemParallelThreadPoolSleeping::wait_fn() {
+    while(!stop_) {
         std::unique_lock<std::mutex> lk(*thread_state_->mutex_);
-        thread_state_->condition_variable_->wait(lk);
+        // ADD PREDICATE TO WAIT:
+        thread_state_->condition_variable_->wait(lk, [this] {
+            return !task_queue_.empty() || stop_;
+        });
+        
+        if (stop_) break;
+        if (task_queue_.empty()) continue;  // Safety check
+        
         auto task_index = task_queue_.front();
         task_queue_.pop();
         lk.unlock();
-        //runtask here
+        
         runnable_->runTask(task_index, num_total_tasks_);
-        std::cout << "Thread " << std::this_thread::get_id() 
-                  << " completed task " << task_index << std::endl;
         ++task_done_;
     }
-    
 }
 
 TaskSystemParallelThreadPoolSleeping::TaskSystemParallelThreadPoolSleeping(int num_threads): ITaskSystem(num_threads) {
@@ -261,11 +266,12 @@ TaskSystemParallelThreadPoolSleeping::TaskSystemParallelThreadPoolSleeping(int n
     //
     thread_state_ = new ThreadState(num_threads - 1);
     threads_.reserve(num_threads);
-
-    threads_[0]=std::thread(&TaskSystemParallelThreadPoolSleeping::signal_fn,this);
-
+    stop_= false;
+    threads_.emplace_back(std::thread(&TaskSystemParallelThreadPoolSleeping::signal_fn,this));
+    //std::cout<<"step : signal init"<<std::endl;
     for (int i = 1; i < num_threads; ++i) {
         threads_.emplace_back(std::thread(&TaskSystemParallelThreadPoolSleeping::wait_fn,this));
+        //std::cout<<"step: wait init"<<std::endl;
     }
 }
 
@@ -277,6 +283,7 @@ TaskSystemParallelThreadPoolSleeping::~TaskSystemParallelThreadPoolSleeping() {
     // (requiring changes to tasksys.h).
     //
     stop_ = true;
+    thread_state_->condition_variable_->notify_all(); //else all waiting threads will stay locked
     for (auto& thread : threads_) {
         thread.join();
     }
@@ -292,18 +299,19 @@ void TaskSystemParallelThreadPoolSleeping::run(IRunnable* runnable, int num_tota
     // method in Parts A and B.  The implementation provided below runs all
     // tasks sequentially on the calling thread.
     //
-
     num_total_tasks_ = num_total_tasks;
     runnable_ = runnable;
     task_done_ = 0;
     {
-        std::lock_guard<std::mutex> lk(lk_);
-        assert(task_queue_.empty());
+        std::lock_guard<std::mutex> lk(*thread_state_->mutex_);
         for (int i = 0; i < num_total_tasks; ++i) {
             task_queue_.push(i);
         }
     }
-    while (task_done_ != num_total_tasks);
+    thread_state_->start_->store(true, std::memory_order_release);
+    thread_state_->condition_variable_->notify_all(); // Notify all threads that there are tasks available
+    //gotta give a signal here to not let the threads take away from the queue before it's done appending all tasks
+    while (task_done_ != num_total_tasks){/*if(task_done_ % 64 == 0) std::cout<<"task done: "<<task_done_<<std::endl;*/};
 }
 
 TaskID TaskSystemParallelThreadPoolSleeping::runAsyncWithDeps(IRunnable* runnable, int num_total_tasks,

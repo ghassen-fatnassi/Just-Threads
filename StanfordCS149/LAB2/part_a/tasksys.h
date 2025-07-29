@@ -83,6 +83,7 @@ class ThreadState {
     public:
         std::condition_variable* condition_variable_;
         std::mutex* mutex_;
+        std::atomic<bool>* start_;
         int counter_;
         int num_waiting_threads_;
         ThreadState(int num_waiting_threads) {
@@ -90,10 +91,12 @@ class ThreadState {
             mutex_ = new std::mutex();
             counter_ = 0;
             num_waiting_threads_ = num_waiting_threads;
+            start_ = new std::atomic<bool>(false);
         }
         ~ThreadState() {
             delete condition_variable_;
             delete mutex_;
+            delete start_;
         }
 };
 
