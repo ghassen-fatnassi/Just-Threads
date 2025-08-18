@@ -15,7 +15,7 @@ Delving into the nuts and bolts of parallel performance optimization, task execu
 #### Labs:
 - [x] **Lab 1:** Performance Analysis on a Quad-Core CPU  
   📖 [Write-Up](https://itgass.notion.site/Write-Up-of-CS149-LAB1-1689f1788efd80db96a8d681ca68f429)  
-- [ ] **Lab 2:** Building A Task Execution Library from the Ground Up  
+- [x] **Lab 2:** Building A Task Execution Library from the Ground Up  
 - [ ] **Lab 3:** A Simple CUDA Renderer  
 - [ ] **Lab 4:** Chat149 - A Flash Attention Transformer DNN  
 - [ ] **Lab 5:** Big Graph Processing in OpenMP  
