@@ -135,15 +135,14 @@ const char* TaskSystemParallelThreadPoolSpinning::name() {
 
 TaskSystemParallelThreadPoolSpinning::TaskSystemParallelThreadPoolSpinning(int num_threads): ITaskSystem(num_threads),
     runnable_(nullptr), stop_(false), task_done_(0) {
-    //
-    // TODO: CS149 student implementations may decide to perform setup
-    // operations (such as thread pool construction) here.
-    // Implementations are free to add new class member variables
-    // (requiring changes to tasksys.h).
-    //
+
     threads_.reserve(num_threads);
     for (int i = 0; i < num_threads; ++i) {
-       threads_.emplace_back([&]() {
+       threads_.emplace_back([&]() { 
+       // [&] captures all local variables by refenrence including:
+		     //i , num_threads, this(the object itself) are shared between the threads
+       //we are using a lamba function
+       //mainly to avoid the atomic vars assignement and copiability problems
            while (!stop_) {
             int task_index = -1;
             {
@@ -169,29 +168,18 @@ TaskSystemParallelThreadPoolSpinning::~TaskSystemParallelThreadPoolSpinning() {
 }
 
 void TaskSystemParallelThreadPoolSpinning::run(IRunnable* runnable, int num_total_tasks) {
-    
-    //
-    // TODO: CS149 students will modify the implementation of this
-    // method in Part A.  The implementation provided below runs all
-    // tasks sequentially on the calling thread.
-    //
+
     num_total_tasks_ = num_total_tasks;
     runnable_ = runnable;
     task_done_ = 0;
     {
-        std::lock_guard<std::mutex> lk(lk_);
+        std::lock_guard<std::mutex> lk(lk_);//this makes sure the whole scope is thread-safe
         assert(task_queue_.empty());
         for (int i = 0; i < num_total_tasks; ++i) {
             task_queue_.push(i);
         }
     }
     while (task_done_ != num_total_tasks);
-    //why do we need this while loop? 
-    // once this goes out of scope
-    // the destructor will be called
-    // and done will become true
-    // and the threads will be joined while there is still some work to do
-    // which means the solution won't pass correctness check
 }
 
 TaskID TaskSystemParallelThreadPoolSpinning::runAsyncWithDeps(IRunnable* runnable, int num_total_tasks,
