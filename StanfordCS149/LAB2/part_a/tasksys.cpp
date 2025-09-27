@@ -135,7 +135,6 @@ const char* TaskSystemParallelThreadPoolSpinning::name() {
 
 TaskSystemParallelThreadPoolSpinning::TaskSystemParallelThreadPoolSpinning(int num_threads): ITaskSystem(num_threads),
     runnable_(nullptr), stop_(false), task_done_(0) {
-
     threads_.reserve(num_threads);
     for (int i = 0; i < num_threads; ++i) {
        threads_.emplace_back([&]() { 
